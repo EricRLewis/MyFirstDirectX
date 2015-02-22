@@ -30,8 +30,10 @@ ID3D11RenderTargetView *backbuffer;	   // the pointer to our back buffer
 ID3D11VertexShader *pVS;    // the vertex shader
 ID3D11PixelShader *pPS;     // the pixel shader
 
-struct VERTEX{ FLOAT X, Y, Z; D3DXCOLOR Color; };    // a struct to define a vertex
-ID3D11Buffer *pVBuffer;                            // the vertex buffer
+struct VERTEX{ FLOAT X, Y, Z; D3DXCOLOR Color; };   // a struct to define a vertex
+ID3D11Buffer *pVBuffer;								// the vertex buffer
+
+ID3D11InputLayout *pLayout;							// The InputLayout
 
 float oldX;							   // x coordinate of the mouse on the previous frame
 float oldY;							   // y coordinate of the mouse on the previous frame
@@ -43,7 +45,8 @@ float newY;							   // y coordinate of ther mouse on the current frame
 void InitD3D(HWND hWnd);    // sets up and initializes Direct3D
 void CleanD3D(void);        // closes Direct3D and releases memory
 void RenderFrame(void);		// renders a single frame
-void InitPipeline();		// Inintiates GPU Pipeline
+void InitGraphics(void);    // creates the shape to render
+void InitPipeline(void);    // loads and prepares the shaders
 
 // the WindowProc function prototype
 LRESULT CALLBACK WindowProc(HWND hWnd,
@@ -237,6 +240,9 @@ void InitD3D(HWND hWnd)
 	viewport.Height = SCREEN_HEIGHT;
 
 	devcon->RSSetViewports(1, &viewport);
+
+	InitPipeline();
+	InitGraphics();
 }
 
 // this is the function that cleans up Direct3D and COM
@@ -244,8 +250,10 @@ void CleanD3D()
 {
 	swapchain->SetFullscreenState(FALSE, NULL);    // switch to windowed mode
 	// close and release all existing COM objects
+	pLayout->Release();
 	pVS->Release();
 	pPS->Release();
+	pVBuffer->Release();
 	swapchain->Release(); 
 	backbuffer->Release();
 	dev->Release();
@@ -266,6 +274,16 @@ void InitPipeline()
 	// set the shader objects
 	devcon->VSSetShader(pVS, 0, 0);
 	devcon->PSSetShader(pPS, 0, 0);
+
+	// create the input layout object
+	D3D11_INPUT_ELEMENT_DESC ied[] =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+	};
+
+	dev->CreateInputLayout(ied, 2, VS->GetBufferPointer(), VS->GetBufferSize(), &pLayout);
+	devcon->IASetInputLayout(pLayout);
 }
 
 void InitGraphics()
@@ -308,6 +326,16 @@ void RenderFrame(void)
 	devcon->ClearRenderTargetView(backbuffer, D3DXCOLOR(red, blue, 0.4f, 1.0f));
 
 	// do 3D rendering on the back buffer here
+	// select which vertex buffer to display
+	UINT stride = sizeof(VERTEX);
+	UINT offset = 0;
+	devcon->IASetVertexBuffers(0, 1, &pVBuffer, &stride, &offset);
+
+	// select which primtive type we are using
+	devcon->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	// draw the vertex buffer to the back buffer
+	devcon->Draw(3, 0);
 
 	// switch the back buffer and the front buffer
 	swapchain->Present(0, 0);
